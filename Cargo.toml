@@ -1,0 +1,8 @@
+[package]
+name = "flakedb"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.30"
+test-case = "1.2.1"
