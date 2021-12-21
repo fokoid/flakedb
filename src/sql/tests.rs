@@ -1,5 +1,5 @@
-use test_case::test_case;
 use super::*;
+use test_case::test_case;
 
 // do we really want to test this?
 #[test]
@@ -19,10 +19,8 @@ fn parse_meta_valid(raw: &str) -> Statement {
 #[test_case("placeholder")]
 fn parse_meta_invalid(raw: &str) {
     let tokens = Tokens::from(raw);
-    assert!(
-        matches!(
-            Statement::parse(tokens).unwrap_err(),
-            super::Error::SyntaxError(_)
-        )
-    )
+    assert!(matches!(
+        Statement::parse(tokens).unwrap_err(),
+        super::Error::SyntaxError(_)
+    ))
 }

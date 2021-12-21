@@ -1,7 +1,7 @@
-use std::io::{self, Write};
-use thiserror::Error;
 use crate::sql;
 use crate::tokens::{Token, Tokens};
+use std::io::{self, Write};
+use thiserror::Error;
 
 pub fn print_prompt() -> Result<()> {
     let prompt = "> ";
@@ -20,7 +20,6 @@ pub fn read_input() -> Result<Command> {
         Command::parse(Tokens::from(buffer.trim()))
     }
 }
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
@@ -58,11 +57,10 @@ impl MetaCommand {
         match tokens.next() {
             None => Ok(Self::None),
             Some(Token::Meta(".exit")) => Ok(Self::Exit),
-            _ => Err(
-                Error::SyntaxError(
-                    format!("invalid meta command '{}'", String::from(tokens))
-                )
-            ),
+            _ => Err(Error::SyntaxError(format!(
+                "invalid meta command '{}'",
+                String::from(tokens)
+            ))),
         }
     }
 

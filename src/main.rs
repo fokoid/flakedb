@@ -1,5 +1,5 @@
-use std::process;
 use flakedb::cli;
+use std::process;
 
 fn main() -> Result<(), cli::Error> {
     loop {
@@ -8,7 +8,7 @@ fn main() -> Result<(), cli::Error> {
             Err(cli::Error::MetaError(raw)) => {
                 println!("Invalid meta command: '{}'.", raw);
                 cli::Command::None
-            },
+            }
             Err(cli::Error::SqlError(err)) => {
                 println!("Invalid SQL: '{:?}'.", err);
                 cli::Command::None

@@ -1,5 +1,5 @@
-use test_case::test_case;
 use super::*;
+use test_case::test_case;
 
 #[test_case("" ; "empty string")]
 #[test_case("     " ; "spaces")]
@@ -20,21 +20,17 @@ fn parse_meta_valid(raw: &str) -> Command {
 #[test_case(".placeholder")]
 fn parse_meta_invalid(raw: &str) {
     let tokens = Tokens::from(raw);
-    assert!(
-        matches!(
-            Command::parse(tokens).unwrap_err(),
-            super::Error::SyntaxError(_)
-        )
-    )
+    assert!(matches!(
+        Command::parse(tokens).unwrap_err(),
+        super::Error::SyntaxError(_)
+    ))
 }
 
 #[test_case("select * from dual")]
 fn parse_sql(raw: &str) {
     let tokens = Tokens::from(raw);
-    assert!(
-        matches!(
-            Command::parse(tokens).unwrap(),
-            Command::Statement(_)
-        )
-    )
+    assert!(matches!(
+        Command::parse(tokens).unwrap(),
+        Command::Statement(_)
+    ))
 }

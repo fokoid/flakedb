@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::tokens::{Token, Tokens};
+use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
@@ -13,14 +13,13 @@ impl Statement {
         match tokens.next() {
             None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(meta)) => Err(Error::SyntaxError(format!(
-                "encountered meta token '{}' when SQL token was expected", meta
+                "encountered meta token '{}' when SQL token was expected",
+                meta
             ))),
             Some(Token::Other(s)) => match s {
                 "insert" => Ok(Self::Insert),
                 "select" => Ok(Self::Select),
-                keyword => Err(Error::SyntaxError(
-                    format!("unknown keyword '{}'", keyword)
-                )),
+                keyword => Err(Error::SyntaxError(format!("unknown keyword '{}'", keyword))),
             },
         }
     }
@@ -31,11 +30,11 @@ impl Statement {
             Self::Insert => {
                 println!("do insert");
                 Ok(())
-            },
+            }
             Self::Select => {
                 println!("do select");
                 Ok(())
-            },
+            }
             Self::None => Ok(()),
         }
     }

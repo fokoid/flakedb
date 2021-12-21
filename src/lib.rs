@@ -3,5 +3,4 @@ mod sql;
 mod tokens;
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
