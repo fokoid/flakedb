@@ -42,7 +42,9 @@ impl InputRow {
 
     pub fn validate(&self) -> Result<ValidatedRow> {
         let mut validated = ValidatedRow {
-            id: self.id.parse()?,
+            id: self.id.parse().map_err(
+                |e| Error::ExecutionError(format!("failed while parsing id ({})", e))
+            )?,
             username: [0; COLUMN_SIZE_USERNAME],
             email: [0; COLUMN_SIZE_EMAIL],
         };

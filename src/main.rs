@@ -3,6 +3,7 @@ use flakedb::Table;
 use std::process;
 
 fn main() -> Result<(), cli::Error> {
+    cli::print_splash()?;
     let mut table = Table::new();
 
     loop {

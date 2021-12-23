@@ -1,5 +1,4 @@
 use std::io;
-use std::num::ParseIntError;
 use thiserror::Error;
 
 mod row;
@@ -17,8 +16,8 @@ pub enum Error {
     SyntaxError(String),
     #[error("execution error: {0}")]
     ExecutionError(String),
-    #[error("parser error {0}")]
-    ParserError(#[from] ParseIntError),
+    #[error("parser error: {0}")]
+    ParserError(String),
     #[error("table full (max rows {0})")]
     TableFullError(usize),
     #[error("IO error")]

@@ -1,11 +1,23 @@
 use crate::sql::{self, Table};
 use crate::tokens::{Token, Tokens};
+use const_format::formatcp;
 use std::io::{self, Write};
 use thiserror::Error;
 
+const NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const SPLASH: &str = "Enter '.help' for assistance";
+const PROMPT: &str = formatcp!("{}>", NAME);
+
+pub fn print_splash() -> Result<()> {
+    println!("{} v{}", NAME, VERSION);
+    println!("{}", SPLASH);
+    io::stdout().flush()?;
+    Ok(())
+}
+
 pub fn print_prompt() -> Result<()> {
-    let prompt = "> ";
-    print!("{}", prompt);
+    print!("{} ", PROMPT);
     io::stdout().flush()?;
     Ok(())
 }
