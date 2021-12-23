@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+memchr = "2.4.1"
 thiserror = "1.0.30"
+
+[dev-dependencies]
 test-case = "1.2.1"

@@ -22,7 +22,7 @@ fn parse_meta_invalid(raw: &str) {
     let tokens = Tokens::from(raw);
     assert!(matches!(
         Command::parse(tokens).unwrap_err(),
-        super::Error::SyntaxError(_)
+        super::Error::MetaSyntaxError(_)
     ))
 }
 

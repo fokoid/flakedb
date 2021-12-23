@@ -1,4 +1,4 @@
-use crate::sql;
+use crate::sql::{self, Table};
 use crate::tokens::{Token, Tokens};
 use std::io::{self, Write};
 use thiserror::Error;
@@ -33,15 +33,21 @@ impl Command {
         match tokens.peek() {
             None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(_)) => Ok(Self::Meta(MetaCommand::parse(tokens)?)),
-            Some(Token::Other(_)) => Ok(Self::Statement(sql::Statement::parse(tokens)?)),
+            Some(Token::Other(_)) => match sql::Statement::parse(tokens) {
+                Ok(statement) => Ok(Self::Statement(statement)),
+                Err(error) => Err(Error::SqlError(error)),
+            },
         }
     }
 
-    pub fn execute(&self) -> Result<()> {
+    pub fn execute(&self, table: &mut Table) -> Result<()> {
         match self {
             Self::None => Ok(()),
             Self::Meta(meta) => Ok(meta.execute()?),
-            Self::Statement(sql) => Ok(sql.execute()?),
+            Self::Statement(sql) => match sql.execute(table) {
+                Ok(_) => Ok(()),
+                Err(error) => Err(Error::SqlError(error)),
+            },
         }
     }
 }
@@ -55,12 +61,14 @@ pub enum MetaCommand {
 impl MetaCommand {
     pub fn parse(mut tokens: Tokens) -> Result<Self> {
         match tokens.next() {
-            None => Ok(Self::None),
+            None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(".exit")) => Ok(Self::Exit),
-            _ => Err(Error::SyntaxError(format!(
-                "invalid meta command '{}'",
-                String::from(tokens)
+            Some(Token::Meta(s)) => Err(Error::MetaSyntaxError(format!(
+                "invalid meta command '{}'", s
             ))),
+            Some(Token::Other(s)) => Err(Error::MetaSyntaxError(format!(
+                "expected meta command, but found '{}'", s
+            )))
         }
     }
 
@@ -77,11 +85,9 @@ pub enum Error {
     #[error("I/O error")]
     IoError(#[from] io::Error),
     #[error("SQL error")]
-    SqlError(#[from] sql::Error),
-    #[error("meta command error")]
-    MetaError(String),
-    #[error("syntax error")]
-    SyntaxError(String),
+    SqlError(sql::Error),
+    #[error("meta command syntax error")]
+    MetaSyntaxError(String),
     #[error("normal program exit")]
     Exit(i32),
 }
