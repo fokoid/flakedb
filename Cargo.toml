@@ -6,8 +6,10 @@ edition = "2021"
 [dependencies]
 const_format = "0.2.22"
 memchr = "2.4.1"
+structopt = "0.3.25"
 thiserror = "1.0.30"
 
 [dev-dependencies]
+assert_fs = "1.0.6"
 rexpect = "0.3"
 test-case = "1.2.1"

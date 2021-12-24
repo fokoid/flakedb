@@ -1,11 +1,13 @@
-use crate::sql::{self, Table};
+use crate::cli::Error::SqlError;
 use crate::tokens::{Token, Tokens};
+use crate::{sql, Database};
 use const_format::formatcp;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use thiserror::Error;
 
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const NAME: &str = env!("CARGO_PKG_NAME");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const SPLASH: &str = "Enter '.help' for assistance";
 const PROMPT: &str = formatcp!("{}>", NAME);
 
@@ -33,6 +35,13 @@ pub fn read_input() -> Result<Command> {
     }
 }
 
+pub fn open_database(path: Option<&PathBuf>) -> Result<Database> {
+    match Database::open(path) {
+        Ok(table) => Ok(table),
+        Err(error) => Err(SqlError(error)),
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
     None,
@@ -52,11 +61,11 @@ impl Command {
         }
     }
 
-    pub fn execute(&self, table: &mut Table) -> Result<()> {
+    pub fn execute(&self, db: &mut Database) -> Result<()> {
         match self {
             Self::None => Ok(()),
             Self::Meta(meta) => Ok(meta.execute()?),
-            Self::Statement(sql) => match sql.execute(table) {
+            Self::Statement(sql) => match sql.execute(db) {
                 Ok(_) => Ok(()),
                 Err(error) => Err(Error::SqlError(error)),
             },
@@ -76,11 +85,13 @@ impl MetaCommand {
             None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(".exit")) => Ok(Self::Exit),
             Some(Token::Meta(s)) => Err(Error::MetaSyntaxError(format!(
-                "invalid meta command '{}'", s
+                "invalid meta command '{}'",
+                s
             ))),
             Some(Token::Other(s)) => Err(Error::MetaSyntaxError(format!(
-                "expected meta command, but found '{}'", s
-            )))
+                "expected meta command, but found '{}'",
+                s
+            ))),
         }
     }
 

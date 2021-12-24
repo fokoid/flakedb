@@ -1,9 +1,9 @@
 use super::{Error, Result};
-use std::io::Write;
+use crate::tokens::Tokens;
 use std::fmt::{Display, Formatter};
+use std::io::Write;
 use std::mem;
 use std::ops::Range;
-use crate::tokens::{Tokens};
 
 const COLUMN_SIZE_ID: usize = mem::size_of::<u16>();
 const COLUMN_SIZE_USERNAME: usize = 32;
@@ -42,9 +42,10 @@ impl InputRow {
 
     pub fn validate(&self) -> Result<ValidatedRow> {
         let mut validated = ValidatedRow {
-            id: self.id.parse().map_err(
-                |e| Error::ExecutionError(format!("failed while parsing id ({})", e))
-            )?,
+            id: self
+                .id
+                .parse()
+                .map_err(|e| Error::ExecutionError(format!("failed while parsing id ({})", e)))?,
             username: [0; COLUMN_SIZE_USERNAME],
             email: [0; COLUMN_SIZE_EMAIL],
         };
@@ -57,7 +58,10 @@ impl InputRow {
                 .username
                 .as_mut_slice()
                 .write(self.username.as_bytes())?;
-            validated.email.as_mut_slice().write(self.email.as_bytes())?;
+            validated
+                .email
+                .as_mut_slice()
+                .write(self.email.as_bytes())?;
             Ok(validated)
         }
     }
@@ -103,9 +107,7 @@ impl ValidatedRow {
     pub fn read(buffer: &[u8; ROW_SIZE]) -> Self {
         // fine to unwrap here as the slice is guaranteed to be large enough
         Self {
-            id: u16::from_be_bytes(
-                buffer[RANGE_ID].try_into().unwrap()
-            ),
+            id: u16::from_be_bytes(buffer[RANGE_ID].try_into().unwrap()),
             username: buffer[RANGE_USERNAME].try_into().unwrap(),
             email: buffer[RANGE_EMAIL].try_into().unwrap(),
         }
