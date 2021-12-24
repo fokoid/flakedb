@@ -1,12 +1,15 @@
 use std::io;
 use thiserror::Error;
 
+mod db;
+mod pager;
 mod row;
-mod table;
-pub use table::Table;
 mod statement;
-pub use statement::Statement;
+mod table;
+
 pub use crate::tokens::{Token, Tokens};
+pub use db::Database;
+pub use statement::Statement;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

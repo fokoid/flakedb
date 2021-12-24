@@ -1,5 +1,5 @@
-use super::{Error, Result, Table, Token, Tokens};
 use super::row::InputRow;
+use super::{Database, Error, Result, Token, Tokens};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
@@ -24,15 +24,15 @@ impl Statement {
         }
     }
 
-    pub fn execute(&self, table: &mut Table) -> Result<()> {
-        println!("Executing...");
+    pub fn execute(&self, db: &mut Database) -> Result<()> {
+        eprintln!("Executing...");
         match self {
             Self::Insert(row) => {
-                table.insert(&row.validate()?)?;
+                db.insert(&row.validate()?)?;
                 Ok(())
             }
             Self::Select => {
-                for row in table.select()? {
+                for row in db.select()? {
                     let row = InputRow::from(&row);
                     println!("{}", row);
                 }
