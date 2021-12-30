@@ -1,9 +1,10 @@
-use crate::sql::row;
 use crate::sql::Result;
+use std::cell::{Ref, RefCell, RefMut};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::iter;
 use std::path::PathBuf;
+
 struct PageFile {
     file: File,
     len: usize,
@@ -31,66 +32,67 @@ impl PageFile {
 }
 
 pub struct Pager {
-    pages: Vec<Option<Page>>,
-    file: Option<PageFile>,
+    pages: Vec<RefCell<Option<Page>>>,
+    file: Option<RefCell<PageFile>>,
 }
 
 impl Pager {
     pub fn open(path: Option<&PathBuf>) -> Result<Self> {
         let file = if let Some(path) = path {
-            Some(PageFile::open(path)?)
+            Some(RefCell::new(PageFile::open(path)?))
         } else {
             None
         };
         Ok(Self {
-            pages: iter::repeat_with(|| None).take(MAX_PAGES).collect(),
+            pages: iter::repeat_with(|| RefCell::new(None)).take(MAX_PAGES).collect(),
             file,
         })
     }
 
     pub fn len(&self) -> usize {
-        self.file.as_ref().map_or(0, |file| file.len)
+        self.file.as_ref().map_or(0, |file| file.borrow().len)
     }
 
-    fn page(&mut self, index: usize) -> Result<&mut Page> {
+    fn load_page_if_missing(&self, index: usize) -> Result<()> {
         if index > MAX_PAGES {
             panic!("page {} out of bounds (max {})", index, MAX_PAGES);
         }
-        if self.pages[index].is_none() {
-            self.pages[index] = Some(if let Some(file) = &mut self.file {
+        let mut page = self.pages[index].borrow_mut();
+        if page.is_none() {
+            *page = Some(if let Some(file) = &self.file {
+                let mut file = file.borrow_mut();
                 let offset = index * PAGE_SIZE;
                 if offset + PAGE_SIZE <= file.len {
-                    Page::from_file(file, offset)?
+                    Page::from_file(&mut file, offset)?
                 } else {
                     Page::new()
                 }
             } else {
                 Page::new()
-            })
+            });
         };
-        Ok(self.pages[index].as_mut().unwrap())
+        Ok(())
     }
 
-    pub fn row(&mut self, index: usize) -> Result<&[u8; row::ROW_SIZE]> {
-        let index = PageIndex::from(index);
-        self.page(index.page).map(|page| page.row(index.row))
+    pub fn borrow_page(&self, index: usize) -> Result<Ref<Page>> {
+        self.load_page_if_missing(index)?;
+        Ok(Ref::map(self.pages[index].borrow(), |page| page.as_ref().unwrap()))
     }
 
-    pub fn row_mut(&mut self, index: usize) -> Result<&mut [u8; row::ROW_SIZE]> {
-        let index = PageIndex::from(index);
-        match self.page(index.page) {
-            Ok(page) => Ok(page.row_mut(index.row)),
-            Err(err) => Err(err),
-        }
+    pub fn borrow_page_mut(&self, index: usize) -> Result<RefMut<Page>> {
+        self.load_page_if_missing(index)?;
+        Ok(RefMut::map(self.pages[index].borrow_mut(), |page| page.as_mut().unwrap()))
     }
 }
 
 impl Drop for Pager {
     fn drop(&mut self) {
-        if let Some(file) = &mut self.file {
-            for (i, page) in self.pages.iter_mut().enumerate() {
-                if let Some(page) = page {
-                    if let Err(error) = page.to_file(file, PAGE_SIZE * i) {
+        if let Some(file) = &self.file {
+            let mut file = file.borrow_mut();
+            for (i, page) in self.pages.iter().enumerate() {
+                let page = page.borrow();
+                if let Some(page) = page.as_ref() {
+                    if let Err(error) = page.to_file(&mut file, PAGE_SIZE * i) {
                         eprintln!(
                             "WARN: possible data loss. Error flushing page {} to disk ({}).",
                             i, error
@@ -102,28 +104,8 @@ impl Drop for Pager {
     }
 }
 
-struct PageIndex {
-    page: usize,
-    row: usize,
-}
-
-impl From<usize> for PageIndex {
-    fn from(row_index: usize) -> Self {
-        PageIndex {
-            page: row_index / ROWS_PER_PAGE,
-            row: row_index % ROWS_PER_PAGE,
-        }
-    }
-}
-
-impl From<PageIndex> for usize {
-    fn from(page_index: PageIndex) -> Self {
-        page_index.page * ROWS_PER_PAGE + page_index.row
-    }
-}
-
 #[derive(Debug)]
-struct Page {
+pub struct Page {
     data: Box<[u8; PAGE_SIZE]>,
 }
 
@@ -178,25 +160,14 @@ impl Page {
         Ok(())
     }
 
-    fn row(&self, index: usize) -> &[u8; row::ROW_SIZE] {
-        if index > ROWS_PER_PAGE {
-            panic!(
-                "row {} out of bounds (max per page {})",
-                index, ROWS_PER_PAGE
-            );
-        }
-        let offset = row::ROW_SIZE * index;
-        let buffer = &self.data[offset..offset + row::ROW_SIZE];
-        buffer.try_into().unwrap()
+    pub fn as_slice(&self) -> &[u8] {
+        self.data.as_slice()
     }
 
-    fn row_mut(&mut self, index: usize) -> &mut [u8; row::ROW_SIZE] {
-        let offset = row::ROW_SIZE * index;
-        let buffer = &mut self.data[offset..offset + row::ROW_SIZE];
-        buffer.try_into().unwrap()
+    pub fn as_mut_slice(&mut self) -> &mut[u8] {
+        self.data.as_mut_slice()
     }
 }
 
 pub const PAGE_SIZE: usize = 4096;
 pub const MAX_PAGES: usize = 100;
-pub const ROWS_PER_PAGE: usize = PAGE_SIZE / row::ROW_SIZE;

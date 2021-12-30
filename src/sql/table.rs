@@ -1,6 +1,8 @@
 use crate::sql::pager::{self, Pager};
 use crate::sql::row::{self, ValidatedRow};
 use crate::sql::{Error, Result};
+use std::cell::{Ref, RefMut};
+use std::ops::Range;
 use std::path::PathBuf;
 
 pub struct Table {
@@ -15,37 +17,39 @@ impl Table {
         Ok(Table { pager, num_rows })
     }
 
+    pub fn num_rows(&self) -> usize {
+        self.num_rows
+    }
+
     /// insert a row into the table
     pub fn insert(&mut self, row: &ValidatedRow) -> Result<()> {
         if self.num_rows == MAX_ROWS {
             return Err(Error::TableFullError(MAX_ROWS));
         }
-        row.write(self.row_mut(self.num_rows)?)
-            .map(|_| self.num_rows += 1)
-    }
-
-    fn row(&mut self, index: usize) -> Result<&[u8; row::ROW_SIZE]> {
-        self.pager.row(index)
-    }
-
-    fn row_mut(&mut self, index: usize) -> Result<&mut [u8; row::ROW_SIZE]> {
-        self.pager.row_mut(index)
+        let result = {
+            let mut cursor = Cursor::end(&self);
+            let mut slice = &mut *cursor.row_mut()?;
+            let result = row.write(&mut slice);
+            result
+        };
+        // only increment row counter if insert succeeded
+        let result = result.map(|_| self.num_rows += 1);
+        result
     }
 
     /// select and return all rows from the table
-    pub fn select(&mut self) -> Result<Results> {
-        Ok(Results::new(self))
+    pub fn select(&self) -> Result<Results> {
+        Ok(Results::new(Cursor::start(&self)))
     }
 }
 
 pub struct Results<'a> {
-    next_row: usize,
-    table: &'a mut Table,
+    cursor: Cursor<'a>
 }
 
 impl<'a> Results<'a> {
-    fn new(table: &'a mut Table) -> Self {
-        Self { next_row: 0, table }
+    fn new(cursor: Cursor<'a>) -> Self {
+        Self { cursor }
     }
 }
 
@@ -53,17 +57,100 @@ impl<'a> Iterator for Results<'a> {
     type Item = ValidatedRow;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next_row < self.table.num_rows {
-            let buffer = self.table.row(self.next_row.into()).unwrap();
-            self.next_row += 1;
-            Some(ValidatedRow::read(buffer))
+        if let Some(buffer) = self.cursor.next() {
+            let buffer = *buffer.unwrap();
+            Some(ValidatedRow::read(&buffer))
         } else {
             None
         }
     }
 }
 
-const MAX_ROWS: usize = pager::ROWS_PER_PAGE * pager::MAX_PAGES;
+struct Cursor<'a> {
+    table: &'a Table,
+    row_num: usize,
+}
+
+impl<'a> Cursor<'a> {
+    pub fn start(table: &'a Table) -> Self {
+        Self { table, row_num: 0 }
+    }
+
+    pub fn end(table: &'a Table) -> Self {
+        Self { table, row_num: table.num_rows() }
+    }
+
+    pub fn at_end(&self) -> bool {
+        self.row_num == self.table.num_rows()
+    }
+
+    fn row(&self) -> Result<Ref<'a, [u8; row::ROW_SIZE]>> {
+        let index = PageIndex::from(self.row_num);
+        let page = self.table.pager.borrow_page(index.page)?;
+        let row = Ref::map(page, |page| {
+            let slice = &page.as_slice()[index.range()];
+            let buffer: &[u8; row::ROW_SIZE] = slice.try_into().unwrap();
+            buffer
+        });
+        Ok(row)
+    }
+
+    fn row_mut(&mut self) -> Result<RefMut<'a, [u8; row::ROW_SIZE]>> {
+        let index = PageIndex::from(self.row_num);
+        let page = self.table.pager.borrow_page_mut(index.page)?;
+        let row = RefMut::map(page, |page| {
+            let slice = &mut page.as_mut_slice()[index.range()];
+            let buffer: &mut [u8; row::ROW_SIZE] = slice.try_into().unwrap();
+            buffer
+        });
+        Ok(row)
+    }
+}
+
+impl<'a> Iterator for Cursor<'a> {
+    type Item = Result<Ref<'a, [u8; row::ROW_SIZE]>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.at_end() {
+            let row = Some(self.row());
+            self.row_num += 1;
+            row
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PageIndex {
+    page: usize,
+    offset: usize,
+}
+
+impl PageIndex {
+    fn range(&self) -> Range<usize> {
+        let end = self.offset + row::ROW_SIZE;
+        self.offset..end
+    }
+}
+
+impl From<usize> for PageIndex {
+    fn from(row_index: usize) -> Self {
+        PageIndex {
+            page: row_index / ROWS_PER_PAGE,
+            offset: row::ROW_SIZE * (row_index % ROWS_PER_PAGE),
+        }
+    }
+}
+
+impl From<PageIndex> for usize {
+    fn from(page_index: PageIndex) -> Self {
+        page_index.page * ROWS_PER_PAGE + (page_index.offset / row::ROW_SIZE)
+    }
+}
+
+const ROWS_PER_PAGE: usize = pager::PAGE_SIZE / row::ROW_SIZE;
+const MAX_ROWS: usize = ROWS_PER_PAGE * pager::MAX_PAGES;
 
 #[cfg(test)]
 mod tests {
