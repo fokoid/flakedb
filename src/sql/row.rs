@@ -97,6 +97,10 @@ pub struct ValidatedRow {
 }
 
 impl ValidatedRow {
+    pub fn key(&self) -> usize {
+        self.id as usize
+    }
+
     pub fn write(&self, buffer: &mut [u8; ROW_SIZE]) -> Result<()> {
         (&mut buffer[RANGE_ID]).write(&self.id.to_be_bytes())?;
         (&mut buffer[RANGE_USERNAME]).write(&self.username)?;
