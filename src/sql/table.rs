@@ -3,6 +3,7 @@ use crate::sql::pager::{PageIndex, Pager};
 use crate::sql::row::{self, ValidatedRow};
 use crate::sql::Result;
 use std::cell::Ref;
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
 pub struct Table {
@@ -27,6 +28,17 @@ impl Table {
     pub fn select(&self) -> Result<Results> {
         let cursor = Cursor::start(&self)?;
         Ok(Results::new(cursor))
+    }
+
+    fn root(&self) -> LeafNode {
+        LeafNode::new(&self.pager, self.root)
+    }
+}
+
+impl Display for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let node = self.root();
+        write!(f, "Root: {}", &node)
     }
 }
 
@@ -61,7 +73,7 @@ struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     pub fn start(table: &'a Table) -> Result<Self> {
-        let node = LeafNode::new(&table.pager, table.root)?;
+        let node = LeafNode::new(&table.pager, table.root);
         Ok(Self {
             node,
             cell_index: 0,
@@ -70,7 +82,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn end(table: &'a Table) -> Result<Self> {
-        let node = LeafNode::new(&table.pager, table.root)?;
+        let node = LeafNode::new(&table.pager, table.root);
         Ok(Self {
             node,
             cell_index: node.num_cells()?,
