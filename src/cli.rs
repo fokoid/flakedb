@@ -32,6 +32,11 @@ pub fn print_constants() -> Result<()> {
     Ok(())
 }
 
+pub fn print_btree(db: &Database) -> Result<()> {
+    println!("{}", db.get_table());
+    Ok(())
+}
+
 pub fn read_input() -> Result<Command> {
     let mut buffer = String::new();
     let num_bytes = io::stdin().read_line(&mut buffer)?;
@@ -72,7 +77,7 @@ impl Command {
     pub fn execute(&self, db: &mut Database) -> Result<()> {
         match self {
             Self::None => Ok(()),
-            Self::Meta(meta) => Ok(meta.execute()?),
+            Self::Meta(meta) => Ok(meta.execute(db)?),
             Self::Statement(sql) => match sql.execute(db) {
                 Ok(_) => Ok(()),
                 Err(error) => Err(Error::SqlError(error)),
@@ -84,6 +89,7 @@ impl Command {
 #[derive(Debug, Eq, PartialEq)]
 pub enum MetaCommand {
     None,
+    BTree,
     Constants,
     Exit,
 }
@@ -93,6 +99,7 @@ impl MetaCommand {
         match tokens.next() {
             None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(".exit")) => Ok(Self::Exit),
+            Some(Token::Meta(".btree")) => Ok(Self::BTree),
             Some(Token::Meta(".constants")) => Ok(Self::Constants),
             Some(Token::Meta(s)) => Err(Error::MetaSyntaxError(format!(
                 "invalid meta command '{}'",
@@ -105,9 +112,10 @@ impl MetaCommand {
         }
     }
 
-    pub fn execute(&self) -> Result<()> {
+    pub fn execute(&self, db: &mut Database) -> Result<()> {
         match self {
             Self::None => Ok(()),
+            Self::BTree => print_btree(db),
             Self::Constants => print_constants(),
             Self::Exit => Err(Error::Exit(0)),
         }

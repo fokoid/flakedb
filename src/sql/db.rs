@@ -22,4 +22,8 @@ impl Database {
     pub fn select(&mut self) -> Result<Results> {
         self.table.select()
     }
+
+    pub fn get_table(&self) -> &Table {
+        &self.table
+    }
 }

@@ -27,6 +27,7 @@ pub mod leaf {
     use crate::sql::row::ValidatedRow;
     use crate::sql::Result;
     use std::cell::{Ref, RefMut};
+    use std::fmt::{Display, Formatter};
     use std::io::Write;
 
     pub const PAGE_SPACE_FOR_CELLS: usize = pager::PAGE_SIZE - header::SIZE;
@@ -82,8 +83,8 @@ pub mod leaf {
     }
 
     impl<'a> Node<'a> {
-        pub fn new(pager: &'a pager::Pager, page: PageIndex) -> Result<Self> {
-            Ok(Self { pager, page })
+        pub fn new(pager: &'a pager::Pager, page: PageIndex) -> Self {
+            Self { pager, page }
         }
 
         fn borrow_page(&self) -> Result<Ref<'a, Page>> {
@@ -137,6 +138,21 @@ pub mod leaf {
             entry.set_key(key)?;
             row.write(&mut *entry.value_mut()?)?;
             self.set_num_cells(num_cells + 1)?;
+            Ok(())
+        }
+    }
+
+    impl<'a> Display for Node<'a> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            if let Ok(num_cells) = self.num_cells() {
+                let keys = (0..num_cells).map(|index| {
+                    let entry = self.entry(index).unwrap();
+                    entry.key().map_or(String::from("?"), |key| format!("{}", key))
+                }).collect::<Vec<_>>().join(", ");
+                write!(f, "Leaf Node ({} cells, keys: [{}])", num_cells, keys)?;
+            } else {
+                write!(f, "Leaf Node (Invalid/Unknown)")?;
+            }
             Ok(())
         }
     }
