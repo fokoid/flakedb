@@ -6,7 +6,7 @@
 //
 // struct Internal;
 //
-mod common {
+pub mod common {
     pub mod header {
         use std::mem;
         use std::ops::Range;
@@ -32,7 +32,7 @@ pub mod leaf {
     pub const PAGE_SPACE_FOR_CELLS: usize = pager::PAGE_SIZE - header::SIZE;
     pub const PAGE_MAX_CELLS: usize = PAGE_SPACE_FOR_CELLS / body::SIZE_CELL;
 
-    mod header {
+    pub mod header {
         use super::super::common;
 
         use std::mem;
@@ -45,7 +45,7 @@ pub mod leaf {
             common::header::SIZE..common::header::SIZE + SIZE_NUM_CELLS;
     }
 
-    mod body {
+    pub mod body {
         use super::header;
         use crate::sql::row;
         use std::mem;
