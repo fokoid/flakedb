@@ -5,6 +5,7 @@ use const_format::formatcp;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use thiserror::Error;
+mod constants;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -21,6 +22,13 @@ pub fn print_splash() -> Result<()> {
 pub fn print_prompt() -> Result<()> {
     print!("{} ", PROMPT);
     io::stdout().flush()?;
+    Ok(())
+}
+
+pub fn print_constants() -> Result<()> {
+    for (prefix, label, constant) in constants::CONSTANTS {
+        println!("{:<8}{:<24}{}", prefix, label, constant);
+    }
     Ok(())
 }
 
@@ -76,6 +84,7 @@ impl Command {
 #[derive(Debug, Eq, PartialEq)]
 pub enum MetaCommand {
     None,
+    Constants,
     Exit,
 }
 
@@ -84,6 +93,7 @@ impl MetaCommand {
         match tokens.next() {
             None | Some(Token::None) => Ok(Self::None),
             Some(Token::Meta(".exit")) => Ok(Self::Exit),
+            Some(Token::Meta(".constants")) => Ok(Self::Constants),
             Some(Token::Meta(s)) => Err(Error::MetaSyntaxError(format!(
                 "invalid meta command '{}'",
                 s
@@ -98,6 +108,7 @@ impl MetaCommand {
     pub fn execute(&self) -> Result<()> {
         match self {
             Self::None => Ok(()),
+            Self::Constants => print_constants(),
             Self::Exit => Err(Error::Exit(0)),
         }
     }
