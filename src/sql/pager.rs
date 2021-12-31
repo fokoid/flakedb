@@ -1,4 +1,4 @@
-use crate::sql::Result;
+use crate::sql::{Error, Result};
 use std::cell::{Ref, RefCell, RefMut};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -18,6 +18,9 @@ impl PageFile {
             .create(true)
             .open(path)?;
         let len = file.seek(SeekFrom::End(0))? as usize;
+        if len % PAGE_SIZE != 0 {
+            return Err(Error::PageFileCorrupt("incomplete page"));
+        };
         file.seek(SeekFrom::Start(0))?;
         Ok(Self { file, len })
     }
@@ -44,7 +47,9 @@ impl Pager {
             None
         };
         Ok(Self {
-            pages: iter::repeat_with(|| RefCell::new(None)).take(MAX_PAGES).collect(),
+            pages: iter::repeat_with(|| RefCell::new(None))
+                .take(MAX_PAGES)
+                .collect(),
             file,
         })
     }
@@ -53,12 +58,12 @@ impl Pager {
         self.file.as_ref().map_or(0, |file| file.borrow().len)
     }
 
-    fn load_page_if_missing(&self, index: usize) -> Result<()> {
-        if index > MAX_PAGES {
+    fn load_page_if_missing(&self, index: PageIndex) -> Result<()> {
+        if index >= MAX_PAGES {
             panic!("page {} out of bounds (max {})", index, MAX_PAGES);
         }
-        let mut page = self.pages[index].borrow_mut();
-        if page.is_none() {
+        if self.pages[index].borrow().is_none() {
+            let mut page = self.pages[index].borrow_mut();
             *page = Some(if let Some(file) = &self.file {
                 let mut file = file.borrow_mut();
                 let offset = index * PAGE_SIZE;
@@ -74,14 +79,20 @@ impl Pager {
         Ok(())
     }
 
-    pub fn borrow_page(&self, index: usize) -> Result<Ref<Page>> {
+    pub fn borrow_page(&self, index: PageIndex) -> Result<Ref<Page>> {
+        // eprintln!("Pager::borrow_page({})", index);
         self.load_page_if_missing(index)?;
-        Ok(Ref::map(self.pages[index].borrow(), |page| page.as_ref().unwrap()))
+        Ok(Ref::map(self.pages[index].borrow(), |page| {
+            page.as_ref().unwrap()
+        }))
     }
 
-    pub fn borrow_page_mut(&self, index: usize) -> Result<RefMut<Page>> {
+    pub fn borrow_page_mut(&self, index: PageIndex) -> Result<RefMut<Page>> {
+        // eprintln!("Pager::borrow_page_mut({})", index);
         self.load_page_if_missing(index)?;
-        Ok(RefMut::map(self.pages[index].borrow_mut(), |page| page.as_mut().unwrap()))
+        Ok(RefMut::map(self.pages[index].borrow_mut(), |page| {
+            page.as_mut().unwrap()
+        }))
     }
 }
 
@@ -103,6 +114,8 @@ impl Drop for Pager {
         }
     }
 }
+
+pub type PageIndex = usize;
 
 #[derive(Debug)]
 pub struct Page {
@@ -164,7 +177,7 @@ impl Page {
         self.data.as_slice()
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut[u8] {
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.data.as_mut_slice()
     }
 }

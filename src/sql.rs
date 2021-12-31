@@ -2,8 +2,8 @@ use std::io;
 use thiserror::Error;
 
 mod db;
-mod pager;
-mod row;
+pub mod pager;
+pub mod row;
 mod statement;
 mod table;
 
@@ -21,8 +21,8 @@ pub enum Error {
     ExecutionError(String),
     #[error("parser error: {0}")]
     ParserError(String),
-    #[error("table full (max rows {0})")]
-    TableFullError(usize),
+    #[error("corrupt page file: {0}")]
+    PageFileCorrupt(&'static str),
     #[error("IO error")]
     IoError(#[from] io::Error),
 }
