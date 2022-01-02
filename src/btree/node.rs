@@ -1,22 +1,110 @@
-// TODO: make leaf::Node private and abstract behind Node enum
-// enum Node<'a> {
-//     Internal(Internal),
-//     Leaf(leaf::Node<'a>),
-// }
-//
-// struct Internal;
-//
+use crate::sql::pager::{Pager, PageIndex};
+use crate::sql::{Error, Result};
+use common::header::NodeType;
+use std::fmt::{Display, Formatter};
+
+pub enum Node<'a> {
+    Root(internal::Node),
+    Internal(internal::Node),
+    Leaf(leaf::Node<'a>),
+}
+
+impl<'a> Node<'a> {
+    pub fn new(pager: &'a Pager, page_index: PageIndex) -> Result<Self> {
+        let flags = {
+            let page = pager.borrow_page(page_index)?;
+            common::header::flags(page)
+        };
+        match flags.node_type {
+            NodeType::Root => Ok(Self::Root(internal::Node)),
+            NodeType::Internal => Ok(Self::Internal(internal::Node)),
+            NodeType::Leaf => Ok(Self::Leaf(leaf::Node::new(pager, page_index))),
+            NodeType::Unknown(u) => Err(Error::PageCorrupt(
+                format!("unknown node format {}", u)
+            )),
+        }
+    }
+
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(match self {
+            Node::Leaf(leaf) => leaf.num_cells()? == 0,
+            _ => unimplemented!()
+        })
+    }
+}
+
+impl<'a> Display for Node<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Root(_) => write!(f, "Root node"),
+            Self::Internal(_) => write!(f, "Internal node"),
+            Self::Leaf(leaf) => write!(f, "Leaf Node: {}", leaf),
+        }
+    }
+}
+pub mod internal {
+    pub struct Node;
+}
+
 pub mod common {
     pub mod header {
+        use std::cell::Ref;
         use std::mem;
         use std::ops::Range;
+        use crate::sql::pager::Page;
 
+        pub enum NodeType {
+            Root,
+            Leaf,
+            Internal,
+            Unknown(u8),
+        }
+
+        pub struct Flags {
+            pub node_type: NodeType,
+        }
+
+        const NODE_TYPE_ROOT: u8 = 1;
+        const NODE_TYPE_INTERNAL: u8 = 2;
+        const NODE_TYPE_LEAF: u8 = 0;
+
+        impl From<u8> for Flags {
+            fn from(flags: u8) -> Self {
+                Self {
+                    node_type: match flags & FLAG_MASK_NODE_TYPE {
+                        NODE_TYPE_ROOT => NodeType::Root,
+                        NODE_TYPE_INTERNAL=> NodeType::Internal,
+                        NODE_TYPE_LEAF => NodeType::Leaf,
+                        x => NodeType::Unknown(x),
+                    }
+                }
+            }
+        }
+
+        impl From<Flags> for u8 {
+            fn from(flags: Flags) -> Self {
+                let result = match flags.node_type {
+                    NodeType::Root => NODE_TYPE_ROOT,
+                    NodeType::Internal => NODE_TYPE_INTERNAL,
+                    NodeType::Leaf => NODE_TYPE_LEAF,
+                    NodeType::Unknown(_) => panic!("unknown node type"),
+                };
+                result
+            }
+        }
+
+        pub const FLAG_MASK_NODE_TYPE: u8 = 3;
         pub const SIZE_FLAGS: usize = mem::size_of::<u8>();
         pub const SIZE_PARENT: usize = mem::size_of::<usize>();
         pub const SIZE: usize = SIZE_FLAGS + SIZE_PARENT;
 
         pub const RANGE_FLAGS: Range<usize> = 0..SIZE_FLAGS;
         pub const RANGE_PARENT: Range<usize> = RANGE_FLAGS.end..RANGE_FLAGS.end + SIZE_PARENT;
+
+        pub fn flags(page: Ref<Page>) -> Flags {
+            let slice = &page.as_slice()[RANGE_FLAGS];
+            u8::from_be_bytes(slice.try_into().unwrap()).into()
+        }
     }
 }
 
