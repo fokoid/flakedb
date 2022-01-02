@@ -23,6 +23,8 @@ pub enum Error {
     ParserError(String),
     #[error("corrupt page file: {0}")]
     PageFileCorrupt(&'static str),
+    #[error("corrupt page")]
+    PageCorrupt(String),
     #[error("IO error")]
     IoError(#[from] io::Error),
 }

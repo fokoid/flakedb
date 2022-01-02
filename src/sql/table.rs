@@ -1,4 +1,4 @@
-use crate::btree::LeafNode;
+use crate::btree::Node;
 use crate::sql::pager::{PageIndex, Pager};
 use crate::sql::row::{self, ValidatedRow};
 use crate::sql::Result;
@@ -30,15 +30,17 @@ impl Table {
         Ok(Results::new(cursor))
     }
 
-    fn root(&self) -> LeafNode {
-        LeafNode::new(&self.pager, self.root)
+    fn root(&self) -> Result<Node> {
+        Node::new(&self.pager, self.root)
     }
 }
 
 impl Display for Table {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let node = self.root();
-        write!(f, "Root: {}", &node)
+        match self.root() {
+            Ok(node) => write!(f, "Root: {}", &node),
+            Err(err) => write!(f, "{:?}", err),
+        }
     }
 }
 
@@ -66,36 +68,45 @@ impl<'a> Iterator for Results<'a> {
 }
 
 struct Cursor<'a> {
-    node: LeafNode<'a>,
+    node: Node<'a>,
     cell_index: usize,
     at_end: bool,
 }
 
 impl<'a> Cursor<'a> {
     pub fn start(table: &'a Table) -> Result<Self> {
-        let node = LeafNode::new(&table.pager, table.root);
-        Ok(Self {
-            node,
-            cell_index: 0,
-            at_end: node.num_cells()? == 0,
-        })
+        let node = Node::new(&table.pager, table.root)?;
+        let at_end = node.is_empty()?;
+        Ok(Self { node, cell_index: 0, at_end, })
     }
 
     pub fn end(table: &'a Table) -> Result<Self> {
-        let node = LeafNode::new(&table.pager, table.root);
-        Ok(Self {
-            node,
-            cell_index: node.num_cells()?,
-            at_end: true,
-        })
+        let node = Node::new(&table.pager, table.root)?;
+        if let Node::Leaf(leaf) = node {
+            Ok(Self {
+                node,
+                cell_index: leaf.num_cells()?,
+                at_end: true,
+            })
+        } else {
+            unimplemented!("cursor at non leaf node")
+        }
     }
 
     fn row(&self) -> Result<Ref<'a, [u8; row::ROW_SIZE]>> {
-        self.node.entry(self.cell_index)?.value()
+        if let Node::Leaf(node) = &self.node {
+            node.entry(self.cell_index)?.value()
+        } else {
+            unimplemented!("cursor at non leaf node")
+        }
     }
 
     fn insert(&mut self, key: usize, row: &ValidatedRow) -> Result<()> {
-        self.node.insert(self.node.num_cells()?, key, row)?;
+        if let Node::Leaf(leaf) = &mut self.node {
+            leaf.insert(leaf.num_cells()?, key, row)?;
+        } else {
+            unimplemented!("cursor at non leaf node")
+        }
         Ok(())
     }
 }
@@ -107,14 +118,18 @@ impl<'a> Iterator for Cursor<'a> {
         if !self.at_end {
             let row = Some(self.row());
             self.cell_index += 1;
-            match self.node.num_cells() {
-                Ok(num_cells) => {
-                    if self.cell_index == num_cells {
-                        self.at_end = true;
+            if let Node::Leaf(leaf) = &self.node{
+                match leaf.num_cells() {
+                    Ok(num_cells) => {
+                        if self.cell_index == num_cells {
+                            self.at_end = true;
+                        }
+                        row
                     }
-                    row
+                    Err(err) => Some(Err(err)),
                 }
-                Err(err) => Some(Err(err)),
+            } else {
+                unimplemented!("cursor at non leaf node")
             }
         } else {
             None
