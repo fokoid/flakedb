@@ -33,7 +33,10 @@ pub fn print_constants() -> Result<()> {
 }
 
 pub fn print_btree(db: &Database) -> Result<()> {
-    println!("{}", db.get_table());
+    match db.get_table_root() {
+        Ok(node) => println!("Root: {}", &node),
+        Err(err) => println!("{:?}", err),
+    };
     Ok(())
 }
 
@@ -78,7 +81,7 @@ impl Command {
         match self {
             Self::None => Ok(()),
             Self::Meta(meta) => Ok(meta.execute(db)?),
-            Self::Statement(sql) => match sql.execute(db) {
+            Self::Statement(sql) => match db.execute(sql) {
                 Ok(_) => Ok(()),
                 Err(error) => Err(Error::SqlError(error)),
             },
