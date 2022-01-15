@@ -1,5 +1,5 @@
 use super::row::InputRow;
-use super::{Database, Error, Result, Token, Tokens};
+use super::{Error, Result, Token, Tokens};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
@@ -21,24 +21,6 @@ impl Statement {
                 "select" => Ok(Self::Select),
                 keyword => Err(Error::SyntaxError(format!("unknown keyword '{}'", keyword))),
             },
-        }
-    }
-
-    pub fn execute(&self, db: &mut Database) -> Result<()> {
-        eprintln!("Executing...");
-        match self {
-            Self::Insert(row) => {
-                db.insert(&row.validate()?)?;
-                Ok(())
-            }
-            Self::Select => {
-                for row in db.select()? {
-                    let row = InputRow::from(&row);
-                    println!("{}", row);
-                }
-                Ok(())
-            }
-            Self::None => Ok(()),
         }
     }
 }

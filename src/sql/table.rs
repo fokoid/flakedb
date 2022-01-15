@@ -3,44 +3,27 @@ use crate::sql::pager::{PageIndex, Pager};
 use crate::sql::row::{self, ValidatedRow};
 use crate::sql::Result;
 use std::cell::Ref;
-use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
 
 pub struct Table {
-    pager: Pager,
-    root: PageIndex,
+    pub root: PageIndex,
 }
 
 impl Table {
-    pub fn open(path: Option<&PathBuf>) -> Result<Self> {
-        let pager = Pager::open(path)?;
-        Ok(Table { pager, root: 0 })
-    }
-
     /// insert a row into the table
-    pub fn insert(&mut self, row: &ValidatedRow) -> Result<()> {
-        let mut cursor = Cursor::end(&self)?;
+    pub fn insert(&self, pager: &Pager, row: &ValidatedRow) -> Result<()> {
+        let mut cursor = Cursor::end(&self, pager)?;
         cursor.insert(row.key(), row)?;
         Ok(())
     }
 
     /// select and return all rows from the table
-    pub fn select(&self) -> Result<Results> {
-        let cursor = Cursor::start(&self)?;
+    pub fn select<'a>(&self, pager: &'a Pager) -> Result<Results<'a>> {
+        let cursor = Cursor::start(&self, pager)?;
         Ok(Results::new(cursor))
     }
 
-    fn root(&self) -> Result<Node> {
-        Node::new(&self.pager, self.root)
-    }
-}
-
-impl Display for Table {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.root() {
-            Ok(node) => write!(f, "Root: {}", &node),
-            Err(err) => write!(f, "{:?}", err),
-        }
+    pub fn root<'a>(&self, pager: &'a Pager) -> Result<Node<'a>> {
+        Node::new(pager, self.root)
     }
 }
 
@@ -74,14 +57,14 @@ struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    pub fn start(table: &'a Table) -> Result<Self> {
-        let node = Node::new(&table.pager, table.root)?;
+    pub fn start(table: &Table, pager: &'a Pager) -> Result<Self> {
+        let node = Node::new(pager, table.root)?;
         let at_end = node.is_empty()?;
         Ok(Self { node, cell_index: 0, at_end, })
     }
 
-    pub fn end(table: &'a Table) -> Result<Self> {
-        let node = Node::new(&table.pager, table.root)?;
+    pub fn end(table: &Table, pager: &'a Pager) -> Result<Self> {
+        let node = Node::new(pager, table.root)?;
         if let Node::Leaf(leaf) = node {
             Ok(Self {
                 node,
@@ -139,6 +122,7 @@ impl<'a> Iterator for Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Database;
     use super::*;
     use crate::sql::row::InputRow;
 
@@ -149,9 +133,9 @@ mod tests {
             username: "karl".into(),
             email: "karl.havok@hotmail.com".into(),
         };
-        let mut table = Table::open(None).unwrap();
-        table.insert(&sample_row.validate().unwrap()).unwrap();
-        let result: Vec<_> = table
+        let mut db = Database::open(None).unwrap();
+        db.insert(&sample_row.validate().unwrap()).unwrap();
+        let result: Vec<_> = db
             .select()
             .unwrap()
             .map(|row| InputRow::from(&row))
