@@ -33,8 +33,8 @@ pub fn print_constants() -> Result<()> {
 }
 
 pub fn print_btree(db: &Database) -> Result<()> {
-    match db.get_table_root() {
-        Ok(node) => println!("Root: {}", &node),
+    match db.tree_as_string() {
+        Ok(s) => println!("{}", s),
         Err(err) => println!("{:?}", err),
     };
     Ok(())
