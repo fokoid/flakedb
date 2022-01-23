@@ -1,14 +1,41 @@
 use crate::btree::Node;
-use super::pager::Pager;
+use super::pager::{Pager, PageIndex};
 use super::row::{InputRow, ValidatedRow};
-use super::table::{Results, Table};
 use super::statement::Statement;
-use super::Result;
+use crate::sql::Result;
+use crate::sql::cursor::Cursor;
 use std::path::PathBuf;
+
+pub struct Table {
+    pub root: PageIndex,
+}
 
 pub struct Database {
     pager: Pager,
     tables: Vec<Table>,
+}
+
+pub struct Results<'a> {
+    cursor: Cursor<'a>,
+}
+
+impl<'a> Results<'a> {
+    fn new(cursor: Cursor<'a>) -> Self {
+        Self { cursor }
+    }
+}
+
+impl<'a> Iterator for Results<'a> {
+    type Item = ValidatedRow;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(buffer) = self.cursor.next() {
+            let buffer = *buffer.unwrap();
+            Some(ValidatedRow::read(&buffer))
+        } else {
+            None
+        }
+    }
 }
 
 // TODO: cleanup messy API
@@ -39,12 +66,17 @@ impl Database {
         }
     }
 
+    /// insert a row into the table
     pub fn insert(&self, row: &ValidatedRow) -> Result<()> {
-        self.get_table().insert(&self.pager, row)
+        let mut cursor = Cursor::end(self.get_table(), &self.pager)?;
+        cursor.insert(row.key(), row)?;
+        Ok(())
     }
 
+    /// select and return all rows from the table
     pub fn select(&self) -> Result<Results> {
-        self.get_table().select(&self.pager)
+        let cursor = Cursor::start(self.get_table(), &self.pager)?;
+        Ok(Results::new(cursor))
     }
 
     fn create_table(&mut self) -> Result<()> {
@@ -55,11 +87,35 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_table(&self) -> &Table {
+    fn get_table(&self) -> &Table {
         &self.tables[0]
     }
 
-    pub fn get_table_root(&self) -> Result<Node> {
-        self.get_table().root(&self.pager)
+    pub fn tree_as_string(&self) -> Result<String> {
+        let root_node = Node::new(&self.pager, self.get_table().root)?;
+        Ok(format!("Root: {}", root_node))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sql::row::InputRow;
+
+    #[test]
+    fn insert_and_select() {
+        let sample_row = InputRow {
+            id: "1".into(),
+            username: "karl".into(),
+            email: "karl.havok@hotmail.com".into(),
+        };
+        let mut db = Database::open(None).unwrap();
+        db.insert(&sample_row.validate().unwrap()).unwrap();
+        let result: Vec<_> = db
+            .select()
+            .unwrap()
+            .map(|row| InputRow::from(&row))
+            .collect();
+        assert_eq!(result, vec![sample_row]);
     }
 }

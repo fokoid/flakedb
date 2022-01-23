@@ -5,7 +5,7 @@ mod db;
 pub mod pager;
 pub mod row;
 mod statement;
-mod table;
+mod cursor;
 
 pub use crate::tokens::{Token, Tokens};
 pub use db::Database;
