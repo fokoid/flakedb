@@ -68,7 +68,7 @@ impl Database {
 
     /// insert a row into the table
     pub fn insert(&self, row: &ValidatedRow) -> Result<()> {
-        let mut cursor = Cursor::end(self.get_table(), &self.pager)?;
+        let mut cursor = Cursor::at(self.get_table(), &self.pager, row.key())?;
         cursor.insert(row.key(), row)?;
         Ok(())
     }
