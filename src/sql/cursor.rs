@@ -15,20 +15,35 @@ impl<'a> Cursor<'a> {
     pub fn start(table: &Table, pager: &'a Pager) -> Result<Self> {
         let node = Node::new(pager, table.root)?;
         let at_end = node.is_empty()?;
-        Ok(Self { node, cell_index: 0, at_end, })
+        Ok(Self { node, cell_index: 0, at_end })
     }
 
-    pub fn end(table: &Table, pager: &'a Pager) -> Result<Self> {
-        let node = Node::new(pager, table.root)?;
-        if let Node::Leaf(leaf) = node {
-            Ok(Self {
-                node,
-                cell_index: leaf.num_cells()?,
-                at_end: true,
-            })
-        } else {
-            unimplemented!("cursor at non leaf node")
-        }
+    pub fn at(table: &Table, pager: &'a Pager, key: usize) -> Result<Self> {
+        let root = Node::new(pager, table.root)?;
+        let cursor = match root {
+            Node::Leaf(node) => {
+                // binary search for largest index such that key at index <= search key
+                let num_cells = node.num_cells()?;
+                let mut search_range = 0..num_cells;
+                while search_range.len() != 0 {
+                    let index = (search_range.start + search_range.end) / 2;
+                    let key_at_index = node.entry(index)?.key()?;
+                    search_range = if key_at_index < key {
+                        index..search_range.end
+                    } else if key_at_index > key {
+                        search_range.start..index
+                    } else {
+                        index..index
+                    };
+                };
+                let cell_index = search_range.start;
+                Self { node: root, cell_index, at_end: cell_index == num_cells, }
+            },
+            Node::Internal(node) => {
+                unimplemented!("cursor at non leaf node")
+            }
+        };
+        Ok(cursor)
     }
 
     fn row(&self) -> Result<Ref<'a, [u8; row::ROW_SIZE]>> {
@@ -40,11 +55,14 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn insert(&mut self, key: usize, row: &ValidatedRow) -> Result<()> {
-        if let Node::Leaf(leaf) = &mut self.node {
-            leaf.insert(leaf.num_cells()?, key, row)?;
-        } else {
-            unimplemented!("cursor at non leaf node")
-        }
+        match &mut self.node {
+            Node::Leaf(node) => {
+                node.insert(self.cell_index, key, row)?;
+            },
+            Node::Internal(node) => {
+                unimplemented!("cursor at non leaf node")
+            }
+        };
         Ok(())
     }
 }

@@ -4,7 +4,6 @@ use common::header::NodeType;
 use std::fmt::{Display, Formatter};
 
 pub enum Node<'a> {
-    Root(internal::Node),
     Internal(internal::Node),
     Leaf(leaf::Node<'a>),
 }
@@ -16,7 +15,6 @@ impl<'a> Node<'a> {
             common::header::flags(page)
         };
         match flags.node_type {
-            NodeType::Root => Ok(Self::Root(internal::Node)),
             NodeType::Internal => Ok(Self::Internal(internal::Node)),
             NodeType::Leaf => Ok(Self::Leaf(leaf::Node::new(pager, page_index))),
             NodeType::Unknown(u) => Err(Error::PageCorrupt(
@@ -36,7 +34,6 @@ impl<'a> Node<'a> {
 impl<'a> Display for Node<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Root(_) => write!(f, "Root node"),
             Self::Internal(_) => write!(f, "Internal node"),
             Self::Leaf(leaf) => write!(f, "Leaf Node: {}", leaf),
         }
