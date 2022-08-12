@@ -11,5 +11,5 @@ thiserror = "1.0.30"
 
 [dev-dependencies]
 assert_fs = "1.0.6"
-rexpect = "0.3"
-test-case = "1.2.1"
+rexpect = "0.4.0"
+test-case = "2.2.1"
